@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 4 (2026-07-05) -->
+<!-- LINE_TEMPLATE_VERSION 6 (2026-07-05) -->
 <style>
   :root {
     --card-bg: #ffffff;
@@ -66,6 +66,11 @@
     margin-bottom: 6px;
     flex-wrap: wrap;
   }
+  .header.legend-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
 
   .card-title {
     font-size: 16px;
@@ -96,8 +101,21 @@
     flex: 1 1 auto;
     min-height: 0;
     position: relative;
+    display: flex;
   }
-  svg { display: block; width: 100%; height: 100%; }
+  .y-gutter { flex: 0 0 auto; }
+  .x-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #dadada transparent;
+  }
+  .x-scroll::-webkit-scrollbar { height: 8px; }
+  .x-scroll::-webkit-scrollbar-thumb { background: #dadada; border-radius: 4px; }
+  body.dark .x-scroll::-webkit-scrollbar-thumb { background: #4b5563; }
+  svg { display: block; }
 
   .tick-label {
     font-size: 11px;
@@ -185,7 +203,8 @@
       <div class="legend" id="legend"></div>
     </div>
     <div class="chart-wrap" id="chartWrap">
-      <svg id="chartSvg"></svg>
+      <div class="y-gutter"><svg id="ySvg"></svg></div>
+      <div class="x-scroll" id="xScroll"><svg id="chartSvg"></svg></div>
       <div class="tooltip" id="tooltip"></div>
     </div>
   </div>
@@ -193,7 +212,7 @@
 <script>
 (function () {
   "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 4");
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 6");
 
   var loadingHidden = false;
   function hideLoading() {
@@ -217,9 +236,11 @@
     sortField: null,        // sort rows by this column (date text or number) before plotting
     showAllXLabels: false,  // true = label every point (no thinning), PBI style
     xSeparators: false,     // true = dashed separators between x labels, PBI style
+    minPointGap: 0,         // px per period; when points would be tighter, plot scrolls horizontally
     currencySymbol: "$",
     darkMode: false,
     showLegend: true,
+    legendPosition: "right",// "right" (Figma) | "left" (under title, PBI style)
     smooth: true,           // curved lines like the reference
     yMin: null,             // null = auto (starts near data when it floats above zero)
     yMax: null,             // null = auto (nice-rounded)
@@ -250,9 +271,11 @@
     sortField: CONFIG.sortField,
     showAllXLabels: CONFIG.showAllXLabels,
     xSeparators: CONFIG.xSeparators,
+    minPointGap: CONFIG.minPointGap,
     currencySymbol: CONFIG.currencySymbol,
     darkMode: CONFIG.darkMode,
     showLegend: CONFIG.showLegend,
+    legendPosition: CONFIG.legendPosition,
     smooth: CONFIG.smooth,
     yMin: CONFIG.yMin,
     yMax: CONFIG.yMax,
@@ -376,6 +399,8 @@
   function render() {
     document.body.classList.toggle("dark", !!state.darkMode);
     document.getElementById("chartTitle").textContent = state.title;
+    document.querySelector(".header").classList.toggle("legend-left",
+      state.legendPosition === "left");
 
     var svg = document.getElementById("chartSvg");
     var legend = document.getElementById("legend");
@@ -455,16 +480,30 @@
     }
     if (yMax <= yMin) yMax = yMin + 1;
 
-    // Geometry from the actual container size
-    var W = Math.max(200, wrap.clientWidth || 600);
-    var H = Math.max(120, wrap.clientHeight || 280);
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.setAttribute("preserveAspectRatio", "none");
+    // Geometry: fixed y-axis gutter + (possibly scrollable) plot area
+    var ySvg = document.getElementById("ySvg");
+    var scrollEl = document.getElementById("xScroll");
+    ySvg.innerHTML = "";
 
-    var isNarrow = W < 420;
+    var H = Math.max(120, wrap.clientHeight || 280);
+    var wrapW = Math.max(200, wrap.clientWidth || 600);
+    var isNarrow = wrapW < 420;
+    var G = isNarrow ? 44 : 54;                     // y-axis gutter width
+    ySvg.parentNode.style.width = G + "px";
+    ySvg.setAttribute("width", G);
+    ySvg.setAttribute("height", H);
+
+    var availW = Math.max(100, wrapW - G);
     var labelLines = xs2 ? (state.xJoiner ? 3 : 2) : 1;
-    var M = { left: isNarrow ? 44 : 54, right: 14, top: 10,
-              bottom: 14 + labelLines * 13 };
+    var M = { left: 6, right: 14, top: 10, bottom: 14 + labelLines * 13 };
+
+    var needW = state.minPointGap > 0 && xs.length > 1
+      ? (xs.length - 1) * state.minPointGap + M.left + M.right
+      : 0;
+    var W = Math.max(availW, needW);
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", H);
+
     var plotW = W - M.left - M.right;
     var plotH = H - M.top - M.bottom;
 
@@ -476,19 +515,19 @@
       return M.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
     }
 
-    // Gridlines + Y ticks (5 divisions)
+    // Y ticks in the fixed gutter; gridlines across the (scrollable) plot
     var ticks = 5;
     for (var t = 0; t <= ticks; t++) {
       var val = yMin + (yMax - yMin) * (t / ticks);
       var y = yPos(val);
       svg.appendChild(el("line", {
-        x1: M.left, x2: M.left + plotW, y1: y, y2: y, "class": "grid-line"
+        x1: 0, x2: W, y1: y, y2: y, "class": "grid-line"
       }));
       var lbl = el("text", {
-        x: M.left - 8, y: y + 3, "text-anchor": "end", "class": "tick-label"
+        x: G - 8, y: y + 3, "text-anchor": "end", "class": "tick-label"
       });
       lbl.textContent = fmtCompact(val);
-      svg.appendChild(lbl);
+      ySvg.appendChild(lbl);
     }
 
     // X labels (thin when crowded); multi-line via tspans when xField2 is set
@@ -508,17 +547,19 @@
         }));
       }
     }
+    var halfW = (xs2 ? 74 : 46) / 2;
     xs.forEach(function (x, i) {
       if (i % step !== 0 && i !== xs.length - 1) return;
+      var lx = Math.min(Math.max(xPos(i), halfW - 2), W - halfW + 4);
       var lbl = el("text", {
-        x: xPos(i), y: baseY, "text-anchor": "middle", "class": "tick-label"
+        x: lx, y: baseY, "text-anchor": "middle", "class": "tick-label"
       });
       if (!xs2) {
         lbl.textContent = x;
       } else {
         var lines = state.xJoiner ? [x, state.xJoiner, xs2[i]] : [x, xs2[i]];
         lines.forEach(function (ln, li) {
-          var ts = el("tspan", { x: xPos(i), dy: li === 0 ? 0 : 13 });
+          var ts = el("tspan", { x: lx, dy: li === 0 ? 0 : 13 });
           ts.textContent = ln;
           lbl.appendChild(ts);
         });
@@ -589,7 +630,7 @@
       var hs = hoverState;
       if (!hs.plot || !hs.xs.length) return;
       var rect = svg.getBoundingClientRect();
-      var mx = (ev.clientX - rect.left) * (hs.W / rect.width);
+      var mx = ev.clientX - rect.left;
       if (mx < hs.plot.left - 6 || mx > hs.plot.left + hs.plot.w + 6) { hide(); return; }
 
       // nearest index
@@ -662,9 +703,11 @@
         state.showAllXLabels = (payload.showAllXLabels === true || payload.showAllXLabels === "true");
       if (payload.xSeparators !== undefined)
         state.xSeparators = (payload.xSeparators === true || payload.xSeparators === "true");
+      if (payload.minPointGap !== undefined) state.minPointGap = +payload.minPointGap || 0;
       if (payload.currencySymbol !== undefined) state.currencySymbol = String(payload.currencySymbol);
       if (payload.showLegend !== undefined)
         state.showLegend = !(payload.showLegend === false || payload.showLegend === "false");
+      if (payload.legendPosition) state.legendPosition = String(payload.legendPosition);
       if (payload.smooth !== undefined)
         state.smooth = !(payload.smooth === false || payload.smooth === "false");
       if (payload.yMin !== undefined) state.yMin = payload.yMin === null ? null : +payload.yMin;
