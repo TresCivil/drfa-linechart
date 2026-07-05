@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 2 (2026-07-05) -->
+<!-- LINE_TEMPLATE_VERSION 3 (2026-07-05) -->
 <style>
   :root {
     --card-bg: #ffffff;
@@ -192,7 +192,7 @@
 <script>
 (function () {
   "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 2");
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 3");
 
   var loadingHidden = false;
   function hideLoading() {
@@ -214,6 +214,8 @@
     xField2: null,          // optional second line for x labels (e.g. period end date)
     xJoiner: "",            // optional text between the two lines (e.g. "to")
     sortField: null,        // sort rows by this column (date text or number) before plotting
+    showAllXLabels: false,  // true = label every point (no thinning), PBI style
+    xSeparators: false,     // true = dashed separators between x labels, PBI style
     currencySymbol: "$",
     darkMode: false,
     showLegend: true,
@@ -245,6 +247,8 @@
     xField2: CONFIG.xField2,
     xJoiner: CONFIG.xJoiner,
     sortField: CONFIG.sortField,
+    showAllXLabels: CONFIG.showAllXLabels,
+    xSeparators: CONFIG.xSeparators,
     currencySymbol: CONFIG.currencySymbol,
     darkMode: CONFIG.darkMode,
     showLegend: CONFIG.showLegend,
@@ -475,8 +479,20 @@
     // X labels (thin when crowded); multi-line via tspans when xField2 is set
     var minLabelW = xs2 ? 74 : 46;
     var maxLabels = Math.max(2, Math.floor(plotW / minLabelW));
-    var step = Math.ceil(xs.length / maxLabels);
+    var step = state.showAllXLabels ? 1 : Math.ceil(xs.length / maxLabels);
     var baseY = M.top + plotH + 16;
+
+    // Dashed separators between periods (PBI style)
+    if (state.xSeparators && xs.length > 1) {
+      for (var si2 = 0; si2 < xs.length - 1; si2++) {
+        var sx = (xPos(si2) + xPos(si2 + 1)) / 2;
+        svg.appendChild(el("line", {
+          x1: sx, x2: sx, y1: M.top + plotH + 4, y2: H - 4,
+          stroke: "var(--axis-color)", "stroke-width": 1,
+          "stroke-dasharray": "2 3", opacity: "0.55"
+        }));
+      }
+    }
     xs.forEach(function (x, i) {
       if (i % step !== 0 && i !== xs.length - 1) return;
       var lbl = el("text", {
@@ -627,6 +643,10 @@
       if (payload.xJoiner !== undefined) state.xJoiner = String(payload.xJoiner || "");
       if (payload.sortField !== undefined)
         state.sortField = payload.sortField ? String(payload.sortField) : null;
+      if (payload.showAllXLabels !== undefined)
+        state.showAllXLabels = (payload.showAllXLabels === true || payload.showAllXLabels === "true");
+      if (payload.xSeparators !== undefined)
+        state.xSeparators = (payload.xSeparators === true || payload.xSeparators === "true");
       if (payload.currencySymbol !== undefined) state.currencySymbol = String(payload.currencySymbol);
       if (payload.showLegend !== undefined)
         state.showLegend = !(payload.showLegend === false || payload.showLegend === "false");
