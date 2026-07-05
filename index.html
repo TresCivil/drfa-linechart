@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Line Chart Template</title>
+<!-- LINE_TEMPLATE_VERSION 1 (2026-07-04) -->
+<style>
+  :root {
+    --card-bg: #ffffff;
+    --card-border: #e5e7eb;      /* grey 200 */
+    --title-color: #111827;      /* grey 900 */
+    --value-color: #111827;
+    --label-color: #686c75;      /* Menu/text muted */
+    --grid-color: #eef0f3;
+    --axis-color: #9ca3af;       /* grey 400 */
+    --crosshair: #f64e60;        /* accent/rose */
+    --tooltip-bg: #ffffff;
+    --tooltip-border: #e5e7eb;
+    --font: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --radius-xl: 12px;
+  }
+
+  body.dark {
+    --card-bg: #111827;
+    --card-border: #374151;
+    --title-color: #f3f4f6;
+    --value-color: #ffffff;
+    --label-color: #9ca3af;
+    --grid-color: #1f2937;
+    --axis-color: #6b7280;
+    --tooltip-bg: #1f2430;
+    --tooltip-border: #374151;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-xl);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+  }
+  body.dark .card-title { color: var(--title-color); }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--title-color);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .chart-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+  }
+  svg { display: block; width: 100%; height: 100%; }
+
+  .tick-label {
+    font-size: 11px;
+    fill: var(--label-color);
+  }
+  .grid-line { stroke: var(--grid-color); stroke-width: 1; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--tooltip-bg);
+    border: 1px solid var(--tooltip-border);
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    color: var(--value-color);
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity .1s ease;
+    white-space: nowrap;
+    z-index: 4;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .tt-x {
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .tooltip .tt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tooltip .tt-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block;
+  }
+  .tooltip .tt-val { font-weight: 600; }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--label-color);
+    font-size: 12.5px;
+  }
+
+  /* ---------- Loading overlay ---------- */
+  .loading {
+    position: absolute;
+    inset: 0;
+    background: var(--card-bg);
+    border-radius: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 5;
+    opacity: 1;
+    transition: opacity .25s ease;
+  }
+  .loading.hide { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid var(--card-border);
+    border-top-color: #17B751;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 12.5px; color: var(--label-color); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading chart…</div>
+    </div>
+    <div class="header">
+      <div class="card-title" id="chartTitle"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="chart-wrap" id="chartWrap">
+      <svg id="chartSvg"></svg>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 1");
+
+  var loadingHidden = false;
+  function hideLoading() {
+    if (loadingHidden) return;
+    loadingHidden = true;
+    var l = document.getElementById("loading");
+    if (l) l.classList.add("hide");
+  }
+  setTimeout(hideLoading, 2500);
+
+  /* ============================================================
+     CONFIG — all overridable per chart via the payload.
+     series: name (legend), field (column in data rows),
+             color, style "solid"|"dotted"|"dashed", fill true/false
+     ============================================================ */
+  var CONFIG = {
+    title: "Cost Trends Over Time",
+    xField: "x",
+    currencySymbol: "$",
+    darkMode: false,
+    showLegend: true,
+    smooth: true,           // curved lines like the reference
+    yMin: 0,                // null = auto from data
+    yMax: null,             // null = auto (nice-rounded)
+    series: [
+      { name: "Estimated cost", field: "estimated", color: "#0095FF", style: "solid",  fill: true },
+      { name: "Submitted cost", field: "submitted", color: "#17B751", style: "dotted", fill: true }
+    ],
+    accentPalette: ["#0095FF", "#17B751", "#F7630C", "#6366F1",
+                    "#14B8A6", "#FACC15", "#EF4444", "#5B03FF"],
+    data: [
+      { x: "Jan", estimated: 110000000, submitted: 50000000 },
+      { x: "Feb", estimated: 150000000, submitted: 75000000 },
+      { x: "Mar", estimated: 180000000, submitted: 95000000 },
+      { x: "Apr", estimated: 200000000, submitted: 115000000 },
+      { x: "May", estimated: 215000000, submitted: 140000000 },
+      { x: "Jun", estimated: 230000000, submitted: 160000000 },
+      { x: "Jul", estimated: 237000000, submitted: 180000000 },
+      { x: "Aug", estimated: 237000000, submitted: 180000000 }
+    ]
+  };
+  /* ============================================================ */
+
+  var state = {
+    title: CONFIG.title,
+    xField: CONFIG.xField,
+    currencySymbol: CONFIG.currencySymbol,
+    darkMode: CONFIG.darkMode,
+    showLegend: CONFIG.showLegend,
+    smooth: CONFIG.smooth,
+    yMin: CONFIG.yMin,
+    yMax: CONFIG.yMax,
+    series: null,          // payload override
+    data: []
+  };
+
+  // ---------- Helpers ----------
+  function getField(row, field) {
+    if (row[field] != null) return row[field];
+    var lower = String(field).toLowerCase();
+    for (var k in row) {
+      if (k.toLowerCase() === lower) return row[k];
+    }
+    return null;
+  }
+
+  function toNum(v) {
+    if (v == null) return null;
+    var n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isFinite(n) ? n : null;
+  }
+
+  function fmtCompact(v) {
+    var s = state.currencySymbol;
+    var neg = v < 0 ? "-" : "";
+    v = Math.abs(v);
+    if (v >= 1e9) return neg + s + trim((v / 1e9).toFixed(1)) + "B";
+    if (v >= 1e6) return neg + s + trim((v / 1e6).toFixed(v >= 1e7 ? 0 : 1)) + "M";
+    if (v >= 1e3) return neg + s + trim((v / 1e3).toFixed(0)) + "K";
+    return neg + s + trim(String(Math.round(v * 100) / 100));
+  }
+  function fmtFull(v) {
+    return state.currencySymbol + Math.round(v).toLocaleString("en-US");
+  }
+  function trim(x) { return String(x).replace(/\.0$/, ""); }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function activeSeries() {
+    if (state.series && state.series.length) return state.series;
+    if (CONFIG.series && CONFIG.series.length) return CONFIG.series;
+    return [];
+  }
+
+  function resolveSeries(raw) {
+    if (!Array.isArray(raw)) return null;
+    var out = raw.map(function (item, i) {
+      if (!item || typeof item !== "object") return null;
+      var f = getField(item, "field");
+      if (f == null) return null;
+      return {
+        field: String(f),
+        name: getField(item, "name") != null ? String(getField(item, "name")) : String(f),
+        color: getField(item, "color") != null ? String(getField(item, "color"))
+              : CONFIG.accentPalette[i % CONFIG.accentPalette.length],
+        style: getField(item, "style") != null ? String(getField(item, "style")) : "solid",
+        fill: getField(item, "fill") != null
+              ? (getField(item, "fill") === true || getField(item, "fill") === "true")
+              : true
+      };
+    }).filter(function (x) { return x; });
+    return out.length ? out : null;
+  }
+
+  // Nice axis max: 1/2/2.5/5 x 10^n steps
+  function niceCeil(v) {
+    if (v <= 0) return 1;
+    var exp = Math.floor(Math.log10(v));
+    var base = Math.pow(10, exp);
+    var m = v / base;
+    var nice = m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10;
+    return nice * base;
+  }
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    var n = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  // Smooth path via Catmull-Rom -> cubic bezier
+  function linePath(pts, smooth) {
+    if (!pts.length) return "";
+    if (!smooth || pts.length < 3) {
+      return "M " + pts.map(function (p) { return p[0] + " " + p[1]; }).join(" L ");
+    }
+    var d = "M " + pts[0][0] + " " + pts[0][1];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1],
+          p3 = pts[Math.min(pts.length - 1, i + 2)];
+      var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += " C " + c1x + " " + c1y + ", " + c2x + " " + c2y + ", " + p2[0] + " " + p2[1];
+    }
+    return d;
+  }
+
+  // ---------- Render ----------
+  var hoverState = { xs: [], points: [], plot: null };
+
+  function render() {
+    document.body.classList.toggle("dark", !!state.darkMode);
+    document.getElementById("chartTitle").textContent = state.title;
+
+    var svg = document.getElementById("chartSvg");
+    var legend = document.getElementById("legend");
+    svg.innerHTML = "";
+    legend.innerHTML = "";
+
+    var wrap = document.getElementById("chartWrap");
+    var old = document.querySelector(".empty-state");
+    if (old) old.remove();
+    wrap.style.display = "";
+
+    var data = state.data;
+    var series = activeSeries();
+    if (!data.length || !series.length) {
+      wrap.style.display = "none";
+      var e = document.createElement("div");
+      e.className = "empty-state";
+      e.textContent = "Waiting for data from Power Apps…";
+      document.querySelector(".card").appendChild(e);
+      return;
+    }
+
+    hideLoading();
+
+    // Legend
+    if (state.showLegend !== false) {
+      series.forEach(function (s2) {
+        var item = document.createElement("div");
+        item.className = "legend-item";
+        item.innerHTML = '<span class="legend-dot" style="background:' + s2.color + '"></span>' +
+          escapeHtml(s2.name);
+        legend.appendChild(item);
+      });
+    }
+    legend.style.display = state.showLegend === false ? "none" : "";
+
+    // Extract x labels and numeric matrix
+    var xs = data.map(function (r) {
+      var v = getField(r, state.xField);
+      return v == null ? "" : String(v);
+    });
+    var matrix = series.map(function (s2) {
+      return data.map(function (r) { return toNum(getField(r, s2.field)); });
+    });
+
+    // Y scale
+    var maxV = 0;
+    matrix.forEach(function (arr) {
+      arr.forEach(function (v) { if (v != null && v > maxV) maxV = v; });
+    });
+    var yMax = state.yMax != null ? +state.yMax : niceCeil(maxV * 1.05);
+    var yMin = state.yMin != null ? +state.yMin : 0;
+    if (yMax <= yMin) yMax = yMin + 1;
+
+    // Geometry from the actual container size
+    var W = Math.max(200, wrap.clientWidth || 600);
+    var H = Math.max(120, wrap.clientHeight || 280);
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+
+    var isNarrow = W < 420;
+    var M = { left: isNarrow ? 44 : 54, right: 14, top: 10, bottom: 26 };
+    var plotW = W - M.left - M.right;
+    var plotH = H - M.top - M.bottom;
+
+    function xPos(i) {
+      return xs.length === 1 ? M.left + plotW / 2
+        : M.left + (i / (xs.length - 1)) * plotW;
+    }
+    function yPos(v) {
+      return M.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+    }
+
+    // Gridlines + Y ticks (5 divisions)
+    var ticks = 5;
+    for (var t = 0; t <= ticks; t++) {
+      var val = yMin + (yMax - yMin) * (t / ticks);
+      var y = yPos(val);
+      svg.appendChild(el("line", {
+        x1: M.left, x2: M.left + plotW, y1: y, y2: y, "class": "grid-line"
+      }));
+      var lbl = el("text", {
+        x: M.left - 8, y: y + 3, "text-anchor": "end", "class": "tick-label"
+      });
+      lbl.textContent = fmtCompact(val);
+      svg.appendChild(lbl);
+    }
+
+    // X labels (thin when crowded)
+    var maxLabels = Math.max(2, Math.floor(plotW / 46));
+    var step = Math.ceil(xs.length / maxLabels);
+    xs.forEach(function (x, i) {
+      if (i % step !== 0 && i !== xs.length - 1) return;
+      var lbl = el("text", {
+        x: xPos(i), y: H - 8, "text-anchor": "middle", "class": "tick-label"
+      });
+      lbl.textContent = x;
+      svg.appendChild(lbl);
+    });
+
+    // Area fills + lines
+    var defs = el("defs", {});
+    svg.appendChild(defs);
+
+    var pointsBySeries = [];
+    series.forEach(function (s2, si) {
+      var pts = [];
+      matrix[si].forEach(function (v, i) {
+        if (v != null) pts.push([xPos(i), yPos(v), i, v]);
+      });
+      pointsBySeries.push(pts);
+      if (!pts.length) return;
+
+      if (s2.fill !== false) {
+        var gid = "grad" + si;
+        var grad = el("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
+        var stop1 = el("stop", { offset: "0%", "stop-color": s2.color, "stop-opacity": "0.28" });
+        var stop2 = el("stop", { offset: "100%", "stop-color": s2.color, "stop-opacity": "0.02" });
+        grad.appendChild(stop1); grad.appendChild(stop2);
+        defs.appendChild(grad);
+
+        var areaD = linePath(pts, state.smooth) +
+          " L " + pts[pts.length - 1][0] + " " + (M.top + plotH) +
+          " L " + pts[0][0] + " " + (M.top + plotH) + " Z";
+        svg.appendChild(el("path", { d: areaD, fill: "url(#" + gid + ")", stroke: "none" }));
+      }
+
+      var attrs = {
+        d: linePath(pts, state.smooth),
+        fill: "none",
+        stroke: s2.color,
+        "stroke-width": 2.5,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round"
+      };
+      if (s2.style === "dotted") attrs["stroke-dasharray"] = "1 6";
+      else if (s2.style === "dashed") attrs["stroke-dasharray"] = "7 5";
+      svg.appendChild(el("path", attrs));
+    });
+
+    // Hover layer
+    var hoverGroup = el("g", { "class": "hover-layer" });
+    svg.appendChild(hoverGroup);
+
+    hoverState = {
+      xs: xs, series: series, matrix: matrix,
+      xPos: xPos, yPos: yPos, plot: { left: M.left, top: M.top, w: plotW, h: plotH },
+      hoverGroup: hoverGroup, W: W, H: H
+    };
+    attachHover();
+  }
+
+  function attachHover() {
+    var wrap = document.getElementById("chartWrap");
+    var svg = document.getElementById("chartSvg");
+    var tooltip = document.getElementById("tooltip");
+    if (svg.__hoverBound) return;
+    svg.__hoverBound = true;
+
+    svg.addEventListener("mousemove", function (ev) {
+      var hs = hoverState;
+      if (!hs.plot || !hs.xs.length) return;
+      var rect = svg.getBoundingClientRect();
+      var mx = (ev.clientX - rect.left) * (hs.W / rect.width);
+      if (mx < hs.plot.left - 6 || mx > hs.plot.left + hs.plot.w + 6) { hide(); return; }
+
+      // nearest index
+      var best = 0, bestD = Infinity;
+      for (var i = 0; i < hs.xs.length; i++) {
+        var d = Math.abs(hs.xPos(i) - mx);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+
+      var g = hs.hoverGroup;
+      g.innerHTML = "";
+      var cx = hs.xPos(best);
+      g.appendChild(el("line", {
+        x1: cx, x2: cx, y1: hs.plot.top, y2: hs.plot.top + hs.plot.h,
+        stroke: "var(--crosshair)", "stroke-width": 1, "stroke-dasharray": "3 3"
+      }));
+
+      var rows = "";
+      hs.series.forEach(function (s2, si) {
+        var v = hs.matrix[si][best];
+        if (v == null) return;
+        g.appendChild(el("circle", {
+          cx: cx, cy: hs.yPos(v), r: 4.5,
+          fill: s2.color, stroke: "var(--card-bg)", "stroke-width": 2
+        }));
+        rows += '<div class="tt-row"><span class="tt-dot" style="background:' + s2.color + '"></span>' +
+          escapeHtml(s2.name) + ':&nbsp;<span class="tt-val">' + fmtCompact(v) + '</span></div>';
+      });
+
+      tooltip.innerHTML = '<div class="tt-x">' + escapeHtml(hs.xs[best]) + '</div>' + rows;
+      tooltip.classList.add("show");
+      var wrect = wrap.getBoundingClientRect();
+      var px = ev.clientX - wrect.left + 14;
+      var py = ev.clientY - wrect.top - 12;
+      // keep inside the card
+      var tw = tooltip.offsetWidth, thh = tooltip.offsetHeight;
+      if (px + tw > wrect.width - 4) px = ev.clientX - wrect.left - tw - 14;
+      if (py + thh > wrect.height - 4) py = wrect.height - thh - 4;
+      if (py < 0) py = 0;
+      tooltip.style.left = px + "px";
+      tooltip.style.top = py + "px";
+    });
+
+    svg.addEventListener("mouseleave", hide);
+    function hide() {
+      hoverState.hoverGroup && (hoverState.hoverGroup.innerHTML = "");
+      tooltip.classList.remove("show");
+    }
+  }
+
+  // ---------- Payload ----------
+  function applyPayload(payload) {
+    if (!payload) return;
+    if (typeof payload === "string") {
+      try { payload = JSON.parse(payload); } catch (e) { return; }
+    }
+    if (Array.isArray(payload)) {
+      state.data = payload.filter(function (r) { return r && typeof r === "object"; });
+    } else {
+      if (payload.title)  state.title = String(payload.title);
+      if (payload.xField) state.xField = String(payload.xField);
+      if (payload.currencySymbol !== undefined) state.currencySymbol = String(payload.currencySymbol);
+      if (payload.showLegend !== undefined)
+        state.showLegend = !(payload.showLegend === false || payload.showLegend === "false");
+      if (payload.smooth !== undefined)
+        state.smooth = !(payload.smooth === false || payload.smooth === "false");
+      if (payload.yMin !== undefined) state.yMin = payload.yMin === null ? null : +payload.yMin;
+      if (payload.yMax !== undefined) state.yMax = payload.yMax === null ? null : +payload.yMax;
+      if (payload.series !== undefined) {
+        var s2 = resolveSeries(payload.series);
+        if (s2) state.series = s2;
+      }
+      var dm = payload.darkMode != null ? payload.darkMode
+             : payload.darkmode != null ? payload.darkmode : null;
+      if (dm != null) state.darkMode = (dm === true || dm === "true" || dm === 1 || dm === "1");
+      if (payload.data && Array.isArray(payload.data)) {
+        state.data = payload.data.filter(function (r) { return r && typeof r === "object"; });
+      }
+    }
+    render();
+  }
+
+  window.addEventListener("message", function (ev) {
+    var msg = ev.data;
+    if (msg == null) return;
+    if (typeof msg === "string") {
+      try { msg = JSON.parse(msg); } catch (e) { return; }
+    }
+    if (msg.type && msg.type !== "chartData") return;
+    applyPayload(msg);
+  });
+
+  function initFromHash() {
+    try {
+      var h = window.location.hash;
+      if (!h || h.length < 2) return;
+      applyPayload(JSON.parse(decodeURIComponent(h.substring(1))));
+    } catch (e) { /* ignore */ }
+  }
+  window.addEventListener("hashchange", initFromHash);
+
+  window.updateChart = applyPayload;
+
+  state.data = CONFIG.data;
+  initFromHash();
+  render();
+  window.addEventListener("resize", render);
+})();
+</script>
+</body>
+</html>
