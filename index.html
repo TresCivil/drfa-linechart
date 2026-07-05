@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 6 (2026-07-05) -->
+<!-- LINE_TEMPLATE_VERSION 7 (2026-07-05) -->
 <style>
   :root {
     --card-bg: #ffffff;
@@ -212,7 +212,7 @@
 <script>
 (function () {
   "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 6");
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 7");
 
   var loadingHidden = false;
   function hideLoading() {
@@ -497,8 +497,11 @@
     var labelLines = xs2 ? (state.xJoiner ? 3 : 2) : 1;
     var M = { left: 6, right: 14, top: 10, bottom: 14 + labelLines * 13 };
 
+    var labelHalf = (xs2 ? 74 : 46) / 2;
+    var inset = (state.minPointGap > 0 || state.showAllXLabels) ? labelHalf : 0;
+
     var needW = state.minPointGap > 0 && xs.length > 1
-      ? (xs.length - 1) * state.minPointGap + M.left + M.right
+      ? (xs.length - 1) * state.minPointGap + 2 * inset + M.left + M.right
       : 0;
     var W = Math.max(availW, needW);
     svg.setAttribute("width", W);
@@ -509,7 +512,7 @@
 
     function xPos(i) {
       return xs.length === 1 ? M.left + plotW / 2
-        : M.left + (i / (xs.length - 1)) * plotW;
+        : M.left + inset + (i / (xs.length - 1)) * (plotW - 2 * inset);
     }
     function yPos(v) {
       return M.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
@@ -547,10 +550,11 @@
         }));
       }
     }
-    var halfW = (xs2 ? 74 : 46) / 2;
+    var halfW = labelHalf;
     xs.forEach(function (x, i) {
       if (i % step !== 0 && i !== xs.length - 1) return;
-      var lx = Math.min(Math.max(xPos(i), halfW - 2), W - halfW + 4);
+      var lx = inset > 0 ? xPos(i)
+        : Math.min(Math.max(xPos(i), halfW - 2), W - halfW + 4);
       var lbl = el("text", {
         x: lx, y: baseY, "text-anchor": "middle", "class": "tick-label"
       });
