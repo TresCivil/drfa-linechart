@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 3 (2026-07-05) -->
+<!-- LINE_TEMPLATE_VERSION 4 (2026-07-05) -->
 <style>
   :root {
     --card-bg: #ffffff;
@@ -12,7 +12,7 @@
     --title-color: #111827;      /* grey 900 */
     --value-color: #111827;
     --label-color: #686c75;      /* Menu/text muted */
-    --grid-color: #eef0f3;
+    --grid-color: #f3f5f7;
     --axis-color: #9ca3af;       /* grey 400 */
     --crosshair: #f64e60;        /* accent/rose */
     --tooltip-bg: #ffffff;
@@ -27,7 +27,7 @@
     --title-color: #f3f4f6;
     --value-color: #ffffff;
     --label-color: #9ca3af;
-    --grid-color: #1f2937;
+    --grid-color: #1a2333;
     --axis-color: #6b7280;
     --tooltip-bg: #1f2430;
     --tooltip-border: #374151;
@@ -110,11 +110,12 @@
     pointer-events: none;
     background: var(--tooltip-bg);
     border: 1px solid var(--tooltip-border);
-    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    box-shadow: 0 3px 10px rgba(0,0,0,.14);
     color: var(--value-color);
-    font-size: 12px;
-    padding: 7px 10px;
-    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 9px;
     opacity: 0;
     transition: opacity .1s ease;
     white-space: nowrap;
@@ -192,7 +193,7 @@
 <script>
 (function () {
   "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 3");
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 4");
 
   var loadingHidden = false;
   function hideLoading() {
@@ -220,7 +221,7 @@
     darkMode: false,
     showLegend: true,
     smooth: true,           // curved lines like the reference
-    yMin: 0,                // null = auto from data
+    yMin: null,             // null = auto (starts near data when it floats above zero)
     yMax: null,             // null = auto (nice-rounded)
     series: [
       { name: "Estimated cost", field: "estimated", color: "#0095FF", style: "solid",  fill: true },
@@ -432,12 +433,26 @@
     });
 
     // Y scale
-    var maxV = 0;
+    var maxV = 0, minV = Infinity;
     matrix.forEach(function (arr) {
-      arr.forEach(function (v) { if (v != null && v > maxV) maxV = v; });
+      arr.forEach(function (v) {
+        if (v == null) return;
+        if (v > maxV) maxV = v;
+        if (v < minV) minV = v;
+      });
     });
+    if (!isFinite(minV)) minV = 0;
     var yMax = state.yMax != null ? +state.yMax : niceCeil(maxV * 1.05);
-    var yMin = state.yMin != null ? +state.yMin : 0;
+    var yMin;
+    if (state.yMin != null) {
+      yMin = +state.yMin;
+    } else if (minV >= 0.15 * yMax) {
+      // data floats well above zero -> start axis near the data (Figma style)
+      var stepGuess = yMax / 5;
+      yMin = Math.max(0, Math.floor(minV / stepGuess) * stepGuess);
+    } else {
+      yMin = 0;
+    }
     if (yMax <= yMin) yMax = yMin + 1;
 
     // Geometry from the actual container size
@@ -527,7 +542,7 @@
       if (s2.fill !== false) {
         var gid = "grad" + si;
         var grad = el("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
-        var stop1 = el("stop", { offset: "0%", "stop-color": s2.color, "stop-opacity": "0.28" });
+        var stop1 = el("stop", { offset: "0%", "stop-color": s2.color, "stop-opacity": "0.34" });
         var stop2 = el("stop", { offset: "100%", "stop-color": s2.color, "stop-opacity": "0.02" });
         grad.appendChild(stop1); grad.appendChild(stop2);
         defs.appendChild(grad);
@@ -542,11 +557,11 @@
         d: linePath(pts, state.smooth),
         fill: "none",
         stroke: s2.color,
-        "stroke-width": 2.5,
+        "stroke-width": 3,
         "stroke-linecap": "round",
         "stroke-linejoin": "round"
       };
-      if (s2.style === "dotted") attrs["stroke-dasharray"] = "1 6";
+      if (s2.style === "dotted") attrs["stroke-dasharray"] = "0.1 8";
       else if (s2.style === "dashed") attrs["stroke-dasharray"] = "7 5";
       svg.appendChild(el("path", attrs));
     });
