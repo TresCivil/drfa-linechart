@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 7 (2026-07-05) -->
+<!-- LINE_TEMPLATE_VERSION 8 (2026-07-05) -->
 <style>
   :root {
     --card-bg: #ffffff;
@@ -212,7 +212,7 @@
 <script>
 (function () {
   "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 7");
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 8");
 
   var loadingHidden = false;
   function hideLoading() {
@@ -485,13 +485,11 @@
     var scrollEl = document.getElementById("xScroll");
     ySvg.innerHTML = "";
 
-    var H = Math.max(120, wrap.clientHeight || 280);
+    var wrapH = Math.max(120, wrap.clientHeight || 280);
     var wrapW = Math.max(200, wrap.clientWidth || 600);
     var isNarrow = wrapW < 420;
     var G = isNarrow ? 44 : 54;                     // y-axis gutter width
     ySvg.parentNode.style.width = G + "px";
-    ySvg.setAttribute("width", G);
-    ySvg.setAttribute("height", H);
 
     var availW = Math.max(100, wrapW - G);
     var labelLines = xs2 ? (state.xJoiner ? 3 : 2) : 1;
@@ -504,6 +502,11 @@
       ? (xs.length - 1) * state.minPointGap + 2 * inset + M.left + M.right
       : 0;
     var W = Math.max(availW, needW);
+    // Reserve room for the horizontal scrollbar so it never covers the x labels
+    var willScroll = W > availW + 1;
+    var H = Math.max(110, wrapH - (willScroll ? 12 : 0));
+    ySvg.setAttribute("width", G);
+    ySvg.setAttribute("height", H);
     svg.setAttribute("width", W);
     svg.setAttribute("height", H);
 
