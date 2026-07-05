@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 1 (2026-07-04) -->
+<!-- LINE_TEMPLATE_VERSION 2 (2026-07-05) -->
 <style>
   :root {
     --card-bg: #ffffff;
@@ -192,7 +192,7 @@
 <script>
 (function () {
   "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 1");
+  console.log("DRFA line chart LINE_TEMPLATE_VERSION 2");
 
   var loadingHidden = false;
   function hideLoading() {
@@ -211,6 +211,9 @@
   var CONFIG = {
     title: "Cost Trends Over Time",
     xField: "x",
+    xField2: null,          // optional second line for x labels (e.g. period end date)
+    xJoiner: "",            // optional text between the two lines (e.g. "to")
+    sortField: null,        // sort rows by this column (date text or number) before plotting
     currencySymbol: "$",
     darkMode: false,
     showLegend: true,
@@ -239,6 +242,9 @@
   var state = {
     title: CONFIG.title,
     xField: CONFIG.xField,
+    xField2: CONFIG.xField2,
+    xJoiner: CONFIG.xJoiner,
+    sortField: CONFIG.sortField,
     currencySymbol: CONFIG.currencySymbol,
     darkMode: CONFIG.darkMode,
     showLegend: CONFIG.showLegend,
@@ -278,6 +284,20 @@
     return state.currencySymbol + Math.round(v).toLocaleString("en-US");
   }
   function trim(x) { return String(x).replace(/\.0$/, ""); }
+
+  function sortKey(v) {
+    if (v == null) return Infinity;
+    if (typeof v === "number") return v;
+    var s2 = String(v).trim();
+    var n = parseFloat(s2);
+    if (isFinite(n) && /^-?[\d.]+$/.test(s2)) return n;
+    var t = Date.parse(s2);
+    if (isFinite(t)) return t;
+    // d/m/yyyy or m/d/yyyy fallback: assume day-first (AU)
+    var m = s2.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+    return Infinity;
+  }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -375,6 +395,13 @@
 
     hideLoading();
 
+    // Chronological sort by sortField (date string, ISO text, or number)
+    if (state.sortField) {
+      data = data.slice().sort(function (a, b) {
+        return sortKey(getField(a, state.sortField)) - sortKey(getField(b, state.sortField));
+      });
+    }
+
     // Legend
     if (state.showLegend !== false) {
       series.forEach(function (s2) {
@@ -392,6 +419,10 @@
       var v = getField(r, state.xField);
       return v == null ? "" : String(v);
     });
+    var xs2 = state.xField2 ? data.map(function (r) {
+      var v = getField(r, state.xField2);
+      return v == null ? "" : String(v);
+    }) : null;
     var matrix = series.map(function (s2) {
       return data.map(function (r) { return toNum(getField(r, s2.field)); });
     });
@@ -412,7 +443,9 @@
     svg.setAttribute("preserveAspectRatio", "none");
 
     var isNarrow = W < 420;
-    var M = { left: isNarrow ? 44 : 54, right: 14, top: 10, bottom: 26 };
+    var labelLines = xs2 ? (state.xJoiner ? 3 : 2) : 1;
+    var M = { left: isNarrow ? 44 : 54, right: 14, top: 10,
+              bottom: 14 + labelLines * 13 };
     var plotW = W - M.left - M.right;
     var plotH = H - M.top - M.bottom;
 
@@ -439,15 +472,26 @@
       svg.appendChild(lbl);
     }
 
-    // X labels (thin when crowded)
-    var maxLabels = Math.max(2, Math.floor(plotW / 46));
+    // X labels (thin when crowded); multi-line via tspans when xField2 is set
+    var minLabelW = xs2 ? 74 : 46;
+    var maxLabels = Math.max(2, Math.floor(plotW / minLabelW));
     var step = Math.ceil(xs.length / maxLabels);
+    var baseY = M.top + plotH + 16;
     xs.forEach(function (x, i) {
       if (i % step !== 0 && i !== xs.length - 1) return;
       var lbl = el("text", {
-        x: xPos(i), y: H - 8, "text-anchor": "middle", "class": "tick-label"
+        x: xPos(i), y: baseY, "text-anchor": "middle", "class": "tick-label"
       });
-      lbl.textContent = x;
+      if (!xs2) {
+        lbl.textContent = x;
+      } else {
+        var lines = state.xJoiner ? [x, state.xJoiner, xs2[i]] : [x, xs2[i]];
+        lines.forEach(function (ln, li) {
+          var ts = el("tspan", { x: xPos(i), dy: li === 0 ? 0 : 13 });
+          ts.textContent = ln;
+          lbl.appendChild(ts);
+        });
+      }
       svg.appendChild(lbl);
     });
 
@@ -496,7 +540,7 @@
     svg.appendChild(hoverGroup);
 
     hoverState = {
-      xs: xs, series: series, matrix: matrix,
+      xs: xs, xs2: xs2, xJoiner: state.xJoiner, series: series, matrix: matrix,
       xPos: xPos, yPos: yPos, plot: { left: M.left, top: M.top, w: plotW, h: plotH },
       hoverGroup: hoverGroup, W: W, H: H
     };
@@ -544,7 +588,9 @@
           escapeHtml(s2.name) + ':&nbsp;<span class="tt-val">' + fmtCompact(v) + '</span></div>';
       });
 
-      tooltip.innerHTML = '<div class="tt-x">' + escapeHtml(hs.xs[best]) + '</div>' + rows;
+      var xTitle = hs.xs[best];
+      if (hs.xs2) xTitle += " " + (hs.xJoiner ? hs.xJoiner + " " : "") + hs.xs2[best];
+      tooltip.innerHTML = '<div class="tt-x">' + escapeHtml(xTitle) + '</div>' + rows;
       tooltip.classList.add("show");
       var wrect = wrap.getBoundingClientRect();
       var px = ev.clientX - wrect.left + 14;
@@ -576,6 +622,11 @@
     } else {
       if (payload.title)  state.title = String(payload.title);
       if (payload.xField) state.xField = String(payload.xField);
+      if (payload.xField2 !== undefined)
+        state.xField2 = payload.xField2 ? String(payload.xField2) : null;
+      if (payload.xJoiner !== undefined) state.xJoiner = String(payload.xJoiner || "");
+      if (payload.sortField !== undefined)
+        state.sortField = payload.sortField ? String(payload.sortField) : null;
       if (payload.currencySymbol !== undefined) state.currencySymbol = String(payload.currencySymbol);
       if (payload.showLegend !== undefined)
         state.showLegend = !(payload.showLegend === false || payload.showLegend === "false");
