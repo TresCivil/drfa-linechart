@@ -4,9 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- TEMPLATE_VERSION 1 (2026-11-09)
+<!-- TEMPLATE_VERSION 2 (2026-11-09)
      Takes the same payload as the stacked bar pages, in the URL hash:
-     {title, darkMode, currencySymbol, seriesColors:[{name,color}], areaSeries:["name"], fontSizes:{axis,value},
+     {title, darkMode, currencySymbol, seriesColors:[{name,color}], fontSizes:{axis,value},
+      areaSeries:["name"]      shaded under the line
+      barSeries:["name"]       drawn as upright columns instead of a line
+      ownScaleSeries:["name"]  a line on its own scale, not on the axis shown
+      showLegend:true
       data:[{row:"24/8", series:"Remaining", value:123}]}
      Rows stay in the order they arrive. -->
 <style>
@@ -39,6 +43,9 @@
   .tick { fill: var(--label-color); }
   .gridline { stroke: var(--grid); }
   .cross { stroke: var(--label-color); stroke-dasharray: 3 3; }
+  .legend { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px 18px; padding-top: 10px; font-size: 12px; color: var(--title-color); }
+  .legend:empty { display: none; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
   .tooltip { position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; opacity: 0; transition: opacity .1s; background: var(--tip-bg); color: var(--tip-text); border-radius: 6px; padding: 6px 10px; font-size: 12px; line-height: 1.4; white-space: nowrap; }
   .tooltip.show { opacity: 1; }
   .tooltip b { font-weight: 600; }
@@ -48,13 +55,14 @@
 <div class="card">
   <div class="card-title" id="title"></div>
   <div class="plot" id="plot" role="img"></div>
+  <div class="legend" id="legend"></div>
 </div>
 <div class="tooltip" id="tip"></div>
 <script>
 (function () {
   var NS = "http://www.w3.org/2000/svg";
   var PALETTE = ["#F59E0B", "#2563EB", "#17B751", "#7125EB", "#F13B1B"];
-  var state = { title: "", currencySymbol: "", data: [], seriesColors: {}, areaSeries: [], fontSizes: {} };
+  var state = { title: "", currencySymbol: "", data: [], seriesColors: {}, areaSeries: [], barSeries: [], ownScaleSeries: [], showLegend: false, fontSizes: {} };
   var plot = document.getElementById("plot");
   var tip = document.getElementById("tip");
 
@@ -87,6 +95,8 @@
         name: s,
         color: state.seriesColors[s] || PALETTE[i % PALETTE.length],
         area: state.areaSeries.indexOf(s) >= 0,
+        bar: state.barSeries.indexOf(s) >= 0,
+        own: state.ownScaleSeries.indexOf(s) >= 0,
         pts: rows.map(function (r) { var v = byKey[r + "\u0000" + s]; return v === undefined ? null : v; })
       };
     });
@@ -96,27 +106,57 @@
   function niceMax(top) {
     if (top <= 0) return 1;
     var mag = Math.pow(10, Math.floor(Math.log10(top)));
-    return Math.ceil(top / mag) * mag;
+    var nice = Math.ceil(top / mag) * mag;
+    // Counts: keep the axis labels whole numbers
+    if (nice > 4 && nice < 20 && nice % 4) nice = Math.ceil(nice / 4) * 4;
+    return nice;
+  }
+
+  function renderLegend(m) {
+    var box = document.getElementById("legend");
+    box.textContent = "";
+    if (!state.showLegend) return;
+    m.series.forEach(function (s) {
+      var item = document.createElement("span");
+      var dot = document.createElement("i");
+      dot.style.background = s.color;
+      item.appendChild(dot);
+      item.appendChild(document.createTextNode(s.name));
+      box.appendChild(item);
+    });
   }
 
   function render() {
     document.getElementById("title").textContent = state.title.trim();
     plot.innerHTML = "";
+    var m = model(), n = m.rows.length;
+    renderLegend(m);
     var W = plot.clientWidth, H = plot.clientHeight;
     if (W < 10 || H < 10) return;
-    var m = model(), n = m.rows.length;
     var axis = +state.fontSizes.axis || 12;
     var all = [];
-    m.series.forEach(function (s) { s.pts.forEach(function (v) { if (v !== null) all.push(v); }); });
+    m.series.forEach(function (s) { if (!s.own) s.pts.forEach(function (v) { if (v !== null) all.push(v); }); });
     var ymax = niceMax(all.length ? Math.max.apply(null, all) : 0);
     var pl = Math.max(36, fmt(ymax).length * axis * 0.62 + 10), pr = 10, pt = 8, pb = axis + 14;
     var pw = W - pl - pr, ph = H - pt - pb;
-    function X(i) { return pl + (n > 1 ? pw * i / (n - 1) : pw / 2); }
+    var bars = m.series.filter(function (s) { return s.bar; });
+    // With columns each week gets a band; without them the line runs edge to edge
+    function X(i) {
+      if (bars.length) return pl + pw * (i + 0.5) / Math.max(1, n);
+      return pl + (n > 1 ? pw * i / (n - 1) : pw / 2);
+    }
     function Y(v) { return pt + ph * (1 - v / ymax); }
+    function scaleOf(s) {
+      if (!s.own) return Y;
+      var top = 1;
+      s.pts.forEach(function (v) { if (v !== null && v > top) top = v; });
+      return function (v) { return pt + ph * (1 - v / top); };
+    }
 
     var svg = el("svg", { viewBox: "0 0 " + W + " " + H }, plot);
-    for (var g = 0; g <= 4; g++) {
-      var gv = ymax * g / 4;
+    var ticks = ymax < 4 ? ymax : 4;
+    for (var g = 0; g <= ticks; g++) {
+      var gv = ymax * g / ticks;
       el("line", { "class": "gridline", x1: pl, x2: W - pr, y1: Y(gv), y2: Y(gv) }, svg);
       var yt = el("text", { "class": "tick", x: pl - 8, y: Y(gv) + 4, "font-size": axis, "text-anchor": "end" }, svg);
       yt.textContent = fmt(gv);
@@ -124,18 +164,31 @@
     // Keep x labels from colliding: show every step-th label, counting back from the latest
     var longest = 0;
     m.rows.forEach(function (r) { longest = Math.max(longest, r.length); });
-    var step = Math.max(1, Math.ceil((longest * axis * 0.62 + 12) / Math.max(1, pw / Math.max(1, n - 1))));
+    var step = Math.max(1, Math.ceil((longest * axis * 0.62 + 12) / Math.max(1, pw / Math.max(1, bars.length ? n : n - 1))));
     m.rows.forEach(function (r, i) {
       if ((n - 1 - i) % step) return;
-      var xt = el("text", { "class": "tick", x: X(i), y: H - 6, "font-size": axis, "text-anchor": i === n - 1 ? "end" : (X(i) - pl < 14 ? "start" : "middle") }, svg);
+      var anchor = bars.length ? "middle" : (i === n - 1 ? "end" : (X(i) - pl < 14 ? "start" : "middle"));
+      var xt = el("text", { "class": "tick", x: X(i), y: H - 6, "font-size": axis, "text-anchor": anchor }, svg);
       xt.textContent = r;
     });
 
+    // Columns first, so lines sit on top
+    var band = pw / Math.max(1, n), barW = Math.max(2, band * 0.7 / Math.max(1, bars.length));
+    bars.forEach(function (s, k) {
+      s.pts.forEach(function (v, i) {
+        if (!v) return;
+        var x = X(i) - barW * bars.length / 2 + barW * k;
+        el("rect", { x: x.toFixed(1), y: Y(v).toFixed(1), width: barW.toFixed(1), height: Math.max(1, Y(0) - Y(v)).toFixed(1), rx: 2, fill: s.color }, svg);
+      });
+    });
+
     m.series.forEach(function (s) {
+      if (s.bar) return;
+      var YS = scaleOf(s);
       var d = "", last = -1, first = -1;
       s.pts.forEach(function (v, i) {
         if (v === null) return;
-        d += (first < 0 ? "M" : "L") + X(i).toFixed(1) + "," + Y(v).toFixed(1);
+        d += (first < 0 ? "M" : "L") + X(i).toFixed(1) + "," + YS(v).toFixed(1);
         if (first < 0) first = i;
         last = i;
       });
@@ -158,7 +211,8 @@
     function move(ev) {
       if (!n) return;
       var box = plot.getBoundingClientRect();
-      var i = n > 1 ? Math.round((ev.clientX - box.left - pl) / pw * (n - 1)) : 0;
+      var px = ev.clientX - box.left - pl;
+      var i = bars.length ? Math.floor(px / band) : (n > 1 ? Math.round(px / pw * (n - 1)) : 0);
       i = Math.max(0, Math.min(n - 1, i));
       cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible");
       tip.textContent = "";
@@ -168,7 +222,8 @@
       m.series.forEach(function (s, k) {
         var v = s.pts[i];
         if (v === null) { dots[k].setAttribute("visibility", "hidden"); return; }
-        dots[k].setAttribute("cx", X(i)); dots[k].setAttribute("cy", Y(v)); dots[k].setAttribute("visibility", "visible");
+        // Columns don't get a dot; the label still lists their value
+        dots[k].setAttribute("cx", X(i)); dots[k].setAttribute("cy", scaleOf(s)(v)); dots[k].setAttribute("visibility", s.bar ? "hidden" : "visible");
         var line = document.createElement("div");
         line.textContent = s.name + ": " + fmt(v);
         tip.appendChild(line);
@@ -195,6 +250,9 @@
     if (p.currencySymbol !== undefined) state.currencySymbol = p.currencySymbol;
     if (p.fontSizes) state.fontSizes = p.fontSizes;
     if (p.areaSeries) state.areaSeries = plain(p.areaSeries).map(String);
+    if (p.barSeries) state.barSeries = plain(p.barSeries).map(String);
+    if (p.ownScaleSeries) state.ownScaleSeries = plain(p.ownScaleSeries).map(String);
+    if (p.showLegend !== undefined) state.showLegend = (p.showLegend === true || p.showLegend === "true");
     if (p.seriesColors) {
       state.seriesColors = {};
       p.seriesColors.forEach(function (c) { if (c && c.name) state.seriesColors[c.name] = c.color; });
