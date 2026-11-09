@@ -4,760 +4,225 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Chart Template</title>
-<!-- LINE_TEMPLATE_VERSION 8 (2026-07-05) -->
+<!-- TEMPLATE_VERSION 1 (2026-11-09)
+     Takes the same payload as the stacked bar pages, in the URL hash:
+     {title, darkMode, currencySymbol, seriesColors:[{name,color}], areaSeries:["name"], fontSizes:{axis,value},
+      data:[{row:"24/8", series:"Remaining", value:123}]}
+     Rows stay in the order they arrive. -->
 <style>
   :root {
     --card-bg: #ffffff;
-    --card-border: #e5e7eb;      /* grey 200 */
-    --title-color: #111827;      /* grey 900 */
-    --value-color: #111827;
-    --label-color: #686c75;      /* Menu/text muted */
-    --grid-color: #f3f5f7;
-    --axis-color: #9ca3af;       /* grey 400 */
-    --crosshair: #f64e60;        /* accent/rose */
-    --tooltip-bg: #ffffff;
-    --tooltip-border: #e5e7eb;
+    --card-border: #e5e7eb;
+    --title-color: #111827;
+    --label-color: #686c75;
+    --grid: #e5e7eb;
+    --tip-bg: #111827;
+    --tip-text: #ffffff;
     --font: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
-    --radius-xl: 12px;
   }
-
   body.dark {
     --card-bg: #111827;
     --card-border: #374151;
     --title-color: #f3f4f6;
-    --value-color: #ffffff;
     --label-color: #9ca3af;
-    --grid-color: #1a2333;
-    --axis-color: #6b7280;
-    --tooltip-bg: #1f2430;
-    --tooltip-border: #374151;
+    --grid: #374151;
+    --tip-bg: #f3f4f6;
+    --tip-text: #111827;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  html, body {
-    width: 100%;
-    height: 100%;
-    background: transparent;
-    font-family: var(--font);
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
-  }
-
-  .card {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-xl);
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex: 0 0 auto;
-    margin-bottom: 6px;
-    flex-wrap: wrap;
-  }
-  .header.legend-left {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .card-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #111827;
-  }
-  body.dark .card-title { color: var(--title-color); }
-
-  .legend {
-    display: flex;
-    gap: 18px;
-    flex-wrap: wrap;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12.5px;
-    color: var(--title-color);
-  }
-  .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-  }
-
-  .chart-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    position: relative;
-    display: flex;
-  }
-  .y-gutter { flex: 0 0 auto; }
-  .x-scroll {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: #dadada transparent;
-  }
-  .x-scroll::-webkit-scrollbar { height: 8px; }
-  .x-scroll::-webkit-scrollbar-thumb { background: #dadada; border-radius: 4px; }
-  body.dark .x-scroll::-webkit-scrollbar-thumb { background: #4b5563; }
-  svg { display: block; }
-
-  .tick-label {
-    font-size: 11px;
-    fill: var(--label-color);
-  }
-  .grid-line { stroke: var(--grid-color); stroke-width: 1; }
-
-  .tooltip {
-    position: absolute;
-    pointer-events: none;
-    background: var(--tooltip-bg);
-    border: 1px solid var(--tooltip-border);
-    box-shadow: 0 3px 10px rgba(0,0,0,.14);
-    color: var(--value-color);
-    font-size: 13px;
-    font-weight: 600;
-    padding: 6px 12px;
-    border-radius: 9px;
-    opacity: 0;
-    transition: opacity .1s ease;
-    white-space: nowrap;
-    z-index: 4;
-  }
+  html, body { width: 100%; height: 100%; background: transparent; font-family: var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .card { width: 100%; height: 100%; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px 20px; display: flex; flex-direction: column; overflow: hidden; }
+  .card-title { flex: 0 0 auto; font-size: 14px; font-weight: 700; color: var(--title-color); margin-bottom: 8px; }
+  .card-title:empty { display: none; }
+  .plot { flex: 1 1 auto; min-height: 0; position: relative; touch-action: none; }
+  svg { display: block; width: 100%; height: 100%; }
+  .tick { fill: var(--label-color); }
+  .gridline { stroke: var(--grid); }
+  .cross { stroke: var(--label-color); stroke-dasharray: 3 3; }
+  .tooltip { position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; opacity: 0; transition: opacity .1s; background: var(--tip-bg); color: var(--tip-text); border-radius: 6px; padding: 6px 10px; font-size: 12px; line-height: 1.4; white-space: nowrap; }
   .tooltip.show { opacity: 1; }
-  .tooltip .tt-x {
-    font-weight: 600;
-    margin-bottom: 3px;
-  }
-  .tooltip .tt-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .tooltip .tt-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    display: inline-block;
-  }
-  .tooltip .tt-val { font-weight: 600; }
-
-  .empty-state {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--label-color);
-    font-size: 12.5px;
-  }
-
-  /* ---------- Loading overlay ---------- */
-  .loading {
-    position: absolute;
-    inset: 0;
-    background: var(--card-bg);
-    border-radius: inherit;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    z-index: 5;
-    opacity: 1;
-    transition: opacity .25s ease;
-  }
-  .loading.hide { opacity: 0; pointer-events: none; }
-  .spinner {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 3px solid var(--card-border);
-    border-top-color: #17B751;
-    animation: spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-size: 12.5px; color: var(--label-color); }
+  .tooltip b { font-weight: 600; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="loading" id="loading">
-      <div class="spinner"></div>
-      <div class="loading-text">Loading chart…</div>
-    </div>
-    <div class="header">
-      <div class="card-title" id="chartTitle"></div>
-      <div class="legend" id="legend"></div>
-    </div>
-    <div class="chart-wrap" id="chartWrap">
-      <div class="y-gutter"><svg id="ySvg"></svg></div>
-      <div class="x-scroll" id="xScroll"><svg id="chartSvg"></svg></div>
-      <div class="tooltip" id="tooltip"></div>
-    </div>
-  </div>
-
+<div class="card">
+  <div class="card-title" id="title"></div>
+  <div class="plot" id="plot" role="img"></div>
+</div>
+<div class="tooltip" id="tip"></div>
 <script>
 (function () {
-  "use strict";
-  console.log("DRFA line chart LINE_TEMPLATE_VERSION 8");
+  var NS = "http://www.w3.org/2000/svg";
+  var PALETTE = ["#F59E0B", "#2563EB", "#17B751", "#7125EB", "#F13B1B"];
+  var state = { title: "", currencySymbol: "", data: [], seriesColors: {}, areaSeries: [], fontSizes: {} };
+  var plot = document.getElementById("plot");
+  var tip = document.getElementById("tip");
 
-  var loadingHidden = false;
-  function hideLoading() {
-    if (loadingHidden) return;
-    loadingHidden = true;
-    var l = document.getElementById("loading");
-    if (l) l.classList.add("hide");
-  }
-  setTimeout(hideLoading, 2500);
-
-  /* ============================================================
-     CONFIG — all overridable per chart via the payload.
-     series: name (legend), field (column in data rows),
-             color, style "solid"|"dotted"|"dashed", fill true/false
-     ============================================================ */
-  var CONFIG = {
-    title: "Cost Trends Over Time",
-    xField: "x",
-    xField2: null,          // optional second line for x labels (e.g. period end date)
-    xJoiner: "",            // optional text between the two lines (e.g. "to")
-    sortField: null,        // sort rows by this column (date text or number) before plotting
-    showAllXLabels: false,  // true = label every point (no thinning), PBI style
-    xSeparators: false,     // true = dashed separators between x labels, PBI style
-    minPointGap: 0,         // px per period; when points would be tighter, plot scrolls horizontally
-    currencySymbol: "$",
-    darkMode: false,
-    showLegend: true,
-    legendPosition: "right",// "right" (Figma) | "left" (under title, PBI style)
-    smooth: true,           // curved lines like the reference
-    yMin: null,             // null = auto (starts near data when it floats above zero)
-    yMax: null,             // null = auto (nice-rounded)
-    series: [
-      { name: "Estimated cost", field: "estimated", color: "#0095FF", style: "solid",  fill: true },
-      { name: "Submitted cost", field: "submitted", color: "#17B751", style: "dotted", fill: true }
-    ],
-    accentPalette: ["#0095FF", "#17B751", "#F7630C", "#6366F1",
-                    "#14B8A6", "#FACC15", "#EF4444", "#5B03FF"],
-    data: [
-      { x: "Jan", estimated: 110000000, submitted: 50000000 },
-      { x: "Feb", estimated: 150000000, submitted: 75000000 },
-      { x: "Mar", estimated: 180000000, submitted: 95000000 },
-      { x: "Apr", estimated: 200000000, submitted: 115000000 },
-      { x: "May", estimated: 215000000, submitted: 140000000 },
-      { x: "Jun", estimated: 230000000, submitted: 160000000 },
-      { x: "Jul", estimated: 237000000, submitted: 180000000 },
-      { x: "Aug", estimated: 237000000, submitted: 180000000 }
-    ]
-  };
-  /* ============================================================ */
-
-  var state = {
-    title: CONFIG.title,
-    xField: CONFIG.xField,
-    xField2: CONFIG.xField2,
-    xJoiner: CONFIG.xJoiner,
-    sortField: CONFIG.sortField,
-    showAllXLabels: CONFIG.showAllXLabels,
-    xSeparators: CONFIG.xSeparators,
-    minPointGap: CONFIG.minPointGap,
-    currencySymbol: CONFIG.currencySymbol,
-    darkMode: CONFIG.darkMode,
-    showLegend: CONFIG.showLegend,
-    legendPosition: CONFIG.legendPosition,
-    smooth: CONFIG.smooth,
-    yMin: CONFIG.yMin,
-    yMax: CONFIG.yMax,
-    series: null,          // payload override
-    data: []
-  };
-
-  // ---------- Helpers ----------
-  function getField(row, field) {
-    if (row[field] != null) return row[field];
-    var lower = String(field).toLowerCase();
-    for (var k in row) {
-      if (k.toLowerCase() === lower) return row[k];
-    }
-    return null;
-  }
-
-  function toNum(v) {
-    if (v == null) return null;
-    var n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
-    return isFinite(n) ? n : null;
-  }
-
-  function fmtCompact(v) {
-    var s = state.currencySymbol;
-    var neg = v < 0 ? "-" : "";
-    v = Math.abs(v);
-    if (v >= 1e9) return neg + s + trim((v / 1e9).toFixed(1)) + "B";
-    if (v >= 1e6) return neg + s + trim((v / 1e6).toFixed(v >= 1e7 ? 0 : 1)) + "M";
-    if (v >= 1e3) return neg + s + trim((v / 1e3).toFixed(0)) + "K";
-    return neg + s + trim(String(Math.round(v * 100) / 100));
-  }
-  function fmtFull(v) {
-    return state.currencySymbol + Math.round(v).toLocaleString("en-US");
-  }
-  function trim(x) { return String(x).replace(/\.0$/, ""); }
-
-  function sortKey(v) {
-    if (v == null) return Infinity;
-    if (typeof v === "number") return v;
-    var s2 = String(v).trim();
-    var n = parseFloat(s2);
-    if (isFinite(n) && /^-?[\d.]+$/.test(s2)) return n;
-    var t = Date.parse(s2);
-    if (isFinite(t)) return t;
-    // d/m/yyyy or m/d/yyyy fallback: assume day-first (AU)
-    var m = s2.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
-    return Infinity;
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
-
-  function activeSeries() {
-    if (state.series && state.series.length) return state.series;
-    if (CONFIG.series && CONFIG.series.length) return CONFIG.series;
-    return [];
-  }
-
-  function resolveSeries(raw) {
-    if (!Array.isArray(raw)) return null;
-    var out = raw.map(function (item, i) {
-      if (!item || typeof item !== "object") return null;
-      var f = getField(item, "field");
-      if (f == null) return null;
-      return {
-        field: String(f),
-        name: getField(item, "name") != null ? String(getField(item, "name")) : String(f),
-        color: getField(item, "color") != null ? String(getField(item, "color"))
-              : CONFIG.accentPalette[i % CONFIG.accentPalette.length],
-        style: getField(item, "style") != null ? String(getField(item, "style")) : "solid",
-        fill: getField(item, "fill") != null
-              ? (getField(item, "fill") === true || getField(item, "fill") === "true")
-              : true
-      };
-    }).filter(function (x) { return x; });
-    return out.length ? out : null;
-  }
-
-  // Nice axis max: 1/2/2.5/5 x 10^n steps
-  function niceCeil(v) {
-    if (v <= 0) return 1;
-    var exp = Math.floor(Math.log10(v));
-    var base = Math.pow(10, exp);
-    var m = v / base;
-    var nice = m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10;
-    return nice * base;
-  }
-
-  var SVG_NS = "http://www.w3.org/2000/svg";
-  function el(tag, attrs) {
-    var n = document.createElementNS(SVG_NS, tag);
+  function el(name, attrs, parent) {
+    var n = document.createElementNS(NS, name);
     for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
     return n;
   }
 
-  // Smooth path via Catmull-Rom -> cubic bezier
-  function linePath(pts, smooth) {
-    if (!pts.length) return "";
-    if (!smooth || pts.length < 3) {
-      return "M " + pts.map(function (p) { return p[0] + " " + p[1]; }).join(" L ");
-    }
-    var d = "M " + pts[0][0] + " " + pts[0][1];
-    for (var i = 0; i < pts.length - 1; i++) {
-      var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1],
-          p3 = pts[Math.min(pts.length - 1, i + 2)];
-      var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-      var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-      d += " C " + c1x + " " + c1y + ", " + c2x + " " + c2y + ", " + p2[0] + " " + p2[1];
-    }
-    return d;
+  function fmt(v) {
+    return (state.currencySymbol || "") + Math.round(v).toLocaleString("en-AU");
   }
 
-  // ---------- Render ----------
-  var hoverState = { xs: [], points: [], plot: null };
+  // Column of a table that Power Apps may send as [{Value: x}] or [x]
+  function plain(list) {
+    return (list || []).map(function (x) { return (x && typeof x === "object" && "Value" in x) ? x.Value : x; });
+  }
+
+  function model() {
+    var rows = [], names = [], byKey = {};
+    state.data.forEach(function (d) {
+      var r = String(d.row), s = String(d.series);
+      if (rows.indexOf(r) < 0) rows.push(r);
+      if (names.indexOf(s) < 0) names.push(s);
+      byKey[r + "\u0000" + s] = +d.value || 0;
+    });
+    var series = names.map(function (s, i) {
+      return {
+        name: s,
+        color: state.seriesColors[s] || PALETTE[i % PALETTE.length],
+        area: state.areaSeries.indexOf(s) >= 0,
+        pts: rows.map(function (r) { var v = byKey[r + "\u0000" + s]; return v === undefined ? null : v; })
+      };
+    });
+    return { rows: rows, series: series };
+  }
+
+  function niceMax(top) {
+    if (top <= 0) return 1;
+    var mag = Math.pow(10, Math.floor(Math.log10(top)));
+    return Math.ceil(top / mag) * mag;
+  }
 
   function render() {
-    document.body.classList.toggle("dark", !!state.darkMode);
-    document.getElementById("chartTitle").textContent = state.title;
-    document.querySelector(".header").classList.toggle("legend-left",
-      state.legendPosition === "left");
+    document.getElementById("title").textContent = state.title.trim();
+    plot.innerHTML = "";
+    var W = plot.clientWidth, H = plot.clientHeight;
+    if (W < 10 || H < 10) return;
+    var m = model(), n = m.rows.length;
+    var axis = +state.fontSizes.axis || 12;
+    var all = [];
+    m.series.forEach(function (s) { s.pts.forEach(function (v) { if (v !== null) all.push(v); }); });
+    var ymax = niceMax(all.length ? Math.max.apply(null, all) : 0);
+    var pl = Math.max(36, fmt(ymax).length * axis * 0.62 + 10), pr = 10, pt = 8, pb = axis + 14;
+    var pw = W - pl - pr, ph = H - pt - pb;
+    function X(i) { return pl + (n > 1 ? pw * i / (n - 1) : pw / 2); }
+    function Y(v) { return pt + ph * (1 - v / ymax); }
 
-    var svg = document.getElementById("chartSvg");
-    var legend = document.getElementById("legend");
-    svg.innerHTML = "";
-    legend.innerHTML = "";
-
-    var wrap = document.getElementById("chartWrap");
-    var old = document.querySelector(".empty-state");
-    if (old) old.remove();
-    wrap.style.display = "";
-
-    var data = state.data;
-    var series = activeSeries();
-    if (!data.length || !series.length) {
-      wrap.style.display = "none";
-      var e = document.createElement("div");
-      e.className = "empty-state";
-      e.textContent = "Waiting for data from Power Apps…";
-      document.querySelector(".card").appendChild(e);
-      return;
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H }, plot);
+    for (var g = 0; g <= 4; g++) {
+      var gv = ymax * g / 4;
+      el("line", { "class": "gridline", x1: pl, x2: W - pr, y1: Y(gv), y2: Y(gv) }, svg);
+      var yt = el("text", { "class": "tick", x: pl - 8, y: Y(gv) + 4, "font-size": axis, "text-anchor": "end" }, svg);
+      yt.textContent = fmt(gv);
     }
-
-    hideLoading();
-
-    // Chronological sort by sortField (date string, ISO text, or number)
-    if (state.sortField) {
-      data = data.slice().sort(function (a, b) {
-        return sortKey(getField(a, state.sortField)) - sortKey(getField(b, state.sortField));
-      });
-    }
-
-    // Legend
-    if (state.showLegend !== false) {
-      series.forEach(function (s2) {
-        var item = document.createElement("div");
-        item.className = "legend-item";
-        item.innerHTML = '<span class="legend-dot" style="background:' + s2.color + '"></span>' +
-          escapeHtml(s2.name);
-        legend.appendChild(item);
-      });
-    }
-    legend.style.display = state.showLegend === false ? "none" : "";
-
-    // Extract x labels and numeric matrix
-    var xs = data.map(function (r) {
-      var v = getField(r, state.xField);
-      return v == null ? "" : String(v);
-    });
-    var xs2 = state.xField2 ? data.map(function (r) {
-      var v = getField(r, state.xField2);
-      return v == null ? "" : String(v);
-    }) : null;
-    var matrix = series.map(function (s2) {
-      return data.map(function (r) { return toNum(getField(r, s2.field)); });
+    // Keep x labels from colliding: show every step-th label, counting back from the latest
+    var longest = 0;
+    m.rows.forEach(function (r) { longest = Math.max(longest, r.length); });
+    var step = Math.max(1, Math.ceil((longest * axis * 0.62 + 12) / Math.max(1, pw / Math.max(1, n - 1))));
+    m.rows.forEach(function (r, i) {
+      if ((n - 1 - i) % step) return;
+      var xt = el("text", { "class": "tick", x: X(i), y: H - 6, "font-size": axis, "text-anchor": i === n - 1 ? "end" : (X(i) - pl < 14 ? "start" : "middle") }, svg);
+      xt.textContent = r;
     });
 
-    // Y scale
-    var maxV = 0, minV = Infinity;
-    matrix.forEach(function (arr) {
-      arr.forEach(function (v) {
-        if (v == null) return;
-        if (v > maxV) maxV = v;
-        if (v < minV) minV = v;
+    m.series.forEach(function (s) {
+      var d = "", last = -1, first = -1;
+      s.pts.forEach(function (v, i) {
+        if (v === null) return;
+        d += (first < 0 ? "M" : "L") + X(i).toFixed(1) + "," + Y(v).toFixed(1);
+        if (first < 0) first = i;
+        last = i;
       });
-    });
-    if (!isFinite(minV)) minV = 0;
-    var yMax = state.yMax != null ? +state.yMax : niceCeil(maxV * 1.05);
-    var yMin;
-    if (state.yMin != null) {
-      yMin = +state.yMin;
-    } else if (minV >= 0.15 * yMax) {
-      // data floats well above zero -> start axis near the data (Figma style)
-      var stepGuess = yMax / 5;
-      yMin = Math.max(0, Math.floor(minV / stepGuess) * stepGuess);
-    } else {
-      yMin = 0;
-    }
-    if (yMax <= yMin) yMax = yMin + 1;
-
-    // Geometry: fixed y-axis gutter + (possibly scrollable) plot area
-    var ySvg = document.getElementById("ySvg");
-    var scrollEl = document.getElementById("xScroll");
-    ySvg.innerHTML = "";
-
-    var wrapH = Math.max(120, wrap.clientHeight || 280);
-    var wrapW = Math.max(200, wrap.clientWidth || 600);
-    var isNarrow = wrapW < 420;
-    var G = isNarrow ? 44 : 54;                     // y-axis gutter width
-    ySvg.parentNode.style.width = G + "px";
-
-    var availW = Math.max(100, wrapW - G);
-    var labelLines = xs2 ? (state.xJoiner ? 3 : 2) : 1;
-    var M = { left: 6, right: 14, top: 10, bottom: 14 + labelLines * 13 };
-
-    var labelHalf = (xs2 ? 74 : 46) / 2;
-    var inset = (state.minPointGap > 0 || state.showAllXLabels) ? labelHalf : 0;
-
-    var needW = state.minPointGap > 0 && xs.length > 1
-      ? (xs.length - 1) * state.minPointGap + 2 * inset + M.left + M.right
-      : 0;
-    var W = Math.max(availW, needW);
-    // Reserve room for the horizontal scrollbar so it never covers the x labels
-    var willScroll = W > availW + 1;
-    var H = Math.max(110, wrapH - (willScroll ? 12 : 0));
-    ySvg.setAttribute("width", G);
-    ySvg.setAttribute("height", H);
-    svg.setAttribute("width", W);
-    svg.setAttribute("height", H);
-
-    var plotW = W - M.left - M.right;
-    var plotH = H - M.top - M.bottom;
-
-    function xPos(i) {
-      return xs.length === 1 ? M.left + plotW / 2
-        : M.left + inset + (i / (xs.length - 1)) * (plotW - 2 * inset);
-    }
-    function yPos(v) {
-      return M.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
-    }
-
-    // Y ticks in the fixed gutter; gridlines across the (scrollable) plot
-    var ticks = 5;
-    for (var t = 0; t <= ticks; t++) {
-      var val = yMin + (yMax - yMin) * (t / ticks);
-      var y = yPos(val);
-      svg.appendChild(el("line", {
-        x1: 0, x2: W, y1: y, y2: y, "class": "grid-line"
-      }));
-      var lbl = el("text", {
-        x: G - 8, y: y + 3, "text-anchor": "end", "class": "tick-label"
-      });
-      lbl.textContent = fmtCompact(val);
-      ySvg.appendChild(lbl);
-    }
-
-    // X labels (thin when crowded); multi-line via tspans when xField2 is set
-    var minLabelW = xs2 ? 74 : 46;
-    var maxLabels = Math.max(2, Math.floor(plotW / minLabelW));
-    var step = state.showAllXLabels ? 1 : Math.ceil(xs.length / maxLabels);
-    var baseY = M.top + plotH + 16;
-
-    // Dashed separators between periods (PBI style)
-    if (state.xSeparators && xs.length > 1) {
-      for (var si2 = 0; si2 < xs.length - 1; si2++) {
-        var sx = (xPos(si2) + xPos(si2 + 1)) / 2;
-        svg.appendChild(el("line", {
-          x1: sx, x2: sx, y1: M.top + plotH + 4, y2: H - 4,
-          stroke: "var(--axis-color)", "stroke-width": 1,
-          "stroke-dasharray": "2 3", opacity: "0.55"
-        }));
+      if (first < 0) return;
+      if (s.area) {
+        el("path", { d: d + "L" + X(last).toFixed(1) + "," + Y(0) + "L" + X(first).toFixed(1) + "," + Y(0) + "Z", fill: s.color, "fill-opacity": "0.15" }, svg);
       }
-    }
-    var halfW = labelHalf;
-    xs.forEach(function (x, i) {
-      if (i % step !== 0 && i !== xs.length - 1) return;
-      var lx = inset > 0 ? xPos(i)
-        : Math.min(Math.max(xPos(i), halfW - 2), W - halfW + 4);
-      var lbl = el("text", {
-        x: lx, y: baseY, "text-anchor": "middle", "class": "tick-label"
-      });
-      if (!xs2) {
-        lbl.textContent = x;
-      } else {
-        var lines = state.xJoiner ? [x, state.xJoiner, xs2[i]] : [x, xs2[i]];
-        lines.forEach(function (ln, li) {
-          var ts = el("tspan", { x: lx, dy: li === 0 ? 0 : 13 });
-          ts.textContent = ln;
-          lbl.appendChild(ts);
-        });
-      }
-      svg.appendChild(lbl);
+      el("path", { d: d, fill: "none", stroke: s.color, "stroke-width": "2.5", "stroke-linejoin": "round" }, svg);
     });
 
-    // Area fills + lines
-    var defs = el("defs", {});
-    svg.appendChild(defs);
+    // Hover: nearest week gets a guide line, dots and a label
+    var cross = el("line", { "class": "cross", y1: pt, y2: Y(0), visibility: "hidden" }, svg);
+    var dots = m.series.map(function (s) { return el("circle", { r: 4.5, fill: s.color, stroke: "#ffffff", "stroke-width": 2, visibility: "hidden" }, svg); });
 
-    var pointsBySeries = [];
-    series.forEach(function (s2, si) {
-      var pts = [];
-      matrix[si].forEach(function (v, i) {
-        if (v != null) pts.push([xPos(i), yPos(v), i, v]);
-      });
-      pointsBySeries.push(pts);
-      if (!pts.length) return;
-
-      if (s2.fill !== false) {
-        var gid = "grad" + si;
-        var grad = el("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
-        var stop1 = el("stop", { offset: "0%", "stop-color": s2.color, "stop-opacity": "0.34" });
-        var stop2 = el("stop", { offset: "100%", "stop-color": s2.color, "stop-opacity": "0.02" });
-        grad.appendChild(stop1); grad.appendChild(stop2);
-        defs.appendChild(grad);
-
-        var areaD = linePath(pts, state.smooth) +
-          " L " + pts[pts.length - 1][0] + " " + (M.top + plotH) +
-          " L " + pts[0][0] + " " + (M.top + plotH) + " Z";
-        svg.appendChild(el("path", { d: areaD, fill: "url(#" + gid + ")", stroke: "none" }));
-      }
-
-      var attrs = {
-        d: linePath(pts, state.smooth),
-        fill: "none",
-        stroke: s2.color,
-        "stroke-width": 3,
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round"
-      };
-      if (s2.style === "dotted") attrs["stroke-dasharray"] = "0.1 8";
-      else if (s2.style === "dashed") attrs["stroke-dasharray"] = "7 5";
-      svg.appendChild(el("path", attrs));
-    });
-
-    // Hover layer
-    var hoverGroup = el("g", { "class": "hover-layer" });
-    svg.appendChild(hoverGroup);
-
-    hoverState = {
-      xs: xs, xs2: xs2, xJoiner: state.xJoiner, series: series, matrix: matrix,
-      xPos: xPos, yPos: yPos, plot: { left: M.left, top: M.top, w: plotW, h: plotH },
-      hoverGroup: hoverGroup, W: W, H: H
-    };
-    attachHover();
-  }
-
-  function attachHover() {
-    var wrap = document.getElementById("chartWrap");
-    var svg = document.getElementById("chartSvg");
-    var tooltip = document.getElementById("tooltip");
-    if (svg.__hoverBound) return;
-    svg.__hoverBound = true;
-
-    svg.addEventListener("mousemove", function (ev) {
-      var hs = hoverState;
-      if (!hs.plot || !hs.xs.length) return;
-      var rect = svg.getBoundingClientRect();
-      var mx = ev.clientX - rect.left;
-      if (mx < hs.plot.left - 6 || mx > hs.plot.left + hs.plot.w + 6) { hide(); return; }
-
-      // nearest index
-      var best = 0, bestD = Infinity;
-      for (var i = 0; i < hs.xs.length; i++) {
-        var d = Math.abs(hs.xPos(i) - mx);
-        if (d < bestD) { bestD = d; best = i; }
-      }
-
-      var g = hs.hoverGroup;
-      g.innerHTML = "";
-      var cx = hs.xPos(best);
-      g.appendChild(el("line", {
-        x1: cx, x2: cx, y1: hs.plot.top, y2: hs.plot.top + hs.plot.h,
-        stroke: "var(--crosshair)", "stroke-width": 1, "stroke-dasharray": "3 3"
-      }));
-
-      var rows = "";
-      hs.series.forEach(function (s2, si) {
-        var v = hs.matrix[si][best];
-        if (v == null) return;
-        g.appendChild(el("circle", {
-          cx: cx, cy: hs.yPos(v), r: 4.5,
-          fill: s2.color, stroke: "var(--card-bg)", "stroke-width": 2
-        }));
-        rows += '<div class="tt-row"><span class="tt-dot" style="background:' + s2.color + '"></span>' +
-          escapeHtml(s2.name) + ':&nbsp;<span class="tt-val">' + fmtCompact(v) + '</span></div>';
-      });
-
-      var xTitle = hs.xs[best];
-      if (hs.xs2) xTitle += " " + (hs.xJoiner ? hs.xJoiner + " " : "") + hs.xs2[best];
-      tooltip.innerHTML = '<div class="tt-x">' + escapeHtml(xTitle) + '</div>' + rows;
-      tooltip.classList.add("show");
-      var wrect = wrap.getBoundingClientRect();
-      var px = ev.clientX - wrect.left + 14;
-      var py = ev.clientY - wrect.top - 12;
-      // keep inside the card
-      var tw = tooltip.offsetWidth, thh = tooltip.offsetHeight;
-      if (px + tw > wrect.width - 4) px = ev.clientX - wrect.left - tw - 14;
-      if (py + thh > wrect.height - 4) py = wrect.height - thh - 4;
-      if (py < 0) py = 0;
-      tooltip.style.left = px + "px";
-      tooltip.style.top = py + "px";
-    });
-
-    svg.addEventListener("mouseleave", hide);
     function hide() {
-      hoverState.hoverGroup && (hoverState.hoverGroup.innerHTML = "");
-      tooltip.classList.remove("show");
+      tip.classList.remove("show");
+      cross.setAttribute("visibility", "hidden");
+      dots.forEach(function (c) { c.setAttribute("visibility", "hidden"); });
     }
+    function move(ev) {
+      if (!n) return;
+      var box = plot.getBoundingClientRect();
+      var i = n > 1 ? Math.round((ev.clientX - box.left - pl) / pw * (n - 1)) : 0;
+      i = Math.max(0, Math.min(n - 1, i));
+      cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible");
+      tip.textContent = "";
+      var head = document.createElement("b");
+      head.textContent = m.rows[i];
+      tip.appendChild(head);
+      m.series.forEach(function (s, k) {
+        var v = s.pts[i];
+        if (v === null) { dots[k].setAttribute("visibility", "hidden"); return; }
+        dots[k].setAttribute("cx", X(i)); dots[k].setAttribute("cy", Y(v)); dots[k].setAttribute("visibility", "visible");
+        var line = document.createElement("div");
+        line.textContent = s.name + ": " + fmt(v);
+        tip.appendChild(line);
+      });
+      tip.classList.add("show");
+      // Keep the label inside the frame
+      var tw = tip.offsetWidth, th = tip.offsetHeight;
+      var tx = box.left + X(i) + 12; if (tx + tw > window.innerWidth - 4) tx = box.left + X(i) - tw - 12;
+      var ty = ev.clientY - th - 10; if (ty < 4) ty = ev.clientY + 14;
+      tip.style.transform = "translate(" + Math.max(4, tx) + "px," + ty + "px)";
+    }
+    plot.onpointermove = move;
+    plot.onpointerdown = move;
+    plot.onpointerleave = hide;
+
+    var latest = n ? m.series.map(function (s) { return s.name + " " + fmt(s.pts[n - 1] || 0); }).join(", ") : "no data";
+    plot.setAttribute("aria-label", (state.title.trim() ? state.title.trim() + ". " : "") + "Line chart, " + n + " points. Latest: " + latest + ".");
   }
 
-  // ---------- Payload ----------
-  function applyPayload(payload) {
-    if (!payload) return;
-    if (typeof payload === "string") {
-      try { payload = JSON.parse(payload); } catch (e) { return; }
+  function applyPayload(p) {
+    if (!p) return;
+    if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { return; } }
+    if (p.title !== undefined) state.title = String(p.title);
+    if (p.currencySymbol !== undefined) state.currencySymbol = p.currencySymbol;
+    if (p.fontSizes) state.fontSizes = p.fontSizes;
+    if (p.areaSeries) state.areaSeries = plain(p.areaSeries).map(String);
+    if (p.seriesColors) {
+      state.seriesColors = {};
+      p.seriesColors.forEach(function (c) { if (c && c.name) state.seriesColors[c.name] = c.color; });
     }
-    if (Array.isArray(payload)) {
-      state.data = payload.filter(function (r) { return r && typeof r === "object"; });
-    } else {
-      if (payload.title)  state.title = String(payload.title);
-      if (payload.xField) state.xField = String(payload.xField);
-      if (payload.xField2 !== undefined)
-        state.xField2 = payload.xField2 ? String(payload.xField2) : null;
-      if (payload.xJoiner !== undefined) state.xJoiner = String(payload.xJoiner || "");
-      if (payload.sortField !== undefined)
-        state.sortField = payload.sortField ? String(payload.sortField) : null;
-      if (payload.showAllXLabels !== undefined)
-        state.showAllXLabels = (payload.showAllXLabels === true || payload.showAllXLabels === "true");
-      if (payload.xSeparators !== undefined)
-        state.xSeparators = (payload.xSeparators === true || payload.xSeparators === "true");
-      if (payload.minPointGap !== undefined) state.minPointGap = +payload.minPointGap || 0;
-      if (payload.currencySymbol !== undefined) state.currencySymbol = String(payload.currencySymbol);
-      if (payload.showLegend !== undefined)
-        state.showLegend = !(payload.showLegend === false || payload.showLegend === "false");
-      if (payload.legendPosition) state.legendPosition = String(payload.legendPosition);
-      if (payload.smooth !== undefined)
-        state.smooth = !(payload.smooth === false || payload.smooth === "false");
-      if (payload.yMin !== undefined) state.yMin = payload.yMin === null ? null : +payload.yMin;
-      if (payload.yMax !== undefined) state.yMax = payload.yMax === null ? null : +payload.yMax;
-      if (payload.series !== undefined) {
-        var s2 = resolveSeries(payload.series);
-        if (s2) state.series = s2;
-      }
-      var dm = payload.darkMode != null ? payload.darkMode
-             : payload.darkmode != null ? payload.darkmode : null;
-      if (dm != null) state.darkMode = (dm === true || dm === "true" || dm === 1 || dm === "1");
-      if (payload.data && Array.isArray(payload.data)) {
-        state.data = payload.data.filter(function (r) { return r && typeof r === "object"; });
-      }
-    }
+    if (p.darkMode !== undefined) document.body.classList.toggle("dark", p.darkMode === true || p.darkMode === "true");
+    if (p.data) state.data = p.data;
     render();
   }
 
+  function fromHash() {
+    try {
+      var h = window.location.hash;
+      if (h && h.length > 1) applyPayload(JSON.parse(decodeURIComponent(h.substring(1))));
+    } catch (e) { /* ignore a bad payload */ }
+  }
+
+  window.addEventListener("hashchange", fromHash);
+  window.addEventListener("resize", render);
   window.addEventListener("message", function (ev) {
     var msg = ev.data;
     if (msg == null) return;
-    if (typeof msg === "string") {
-      try { msg = JSON.parse(msg); } catch (e) { return; }
-    }
+    if (typeof msg === "string") { try { msg = JSON.parse(msg); } catch (e) { return; } }
     if (msg.type && msg.type !== "chartData") return;
     applyPayload(msg);
   });
-
-  function initFromHash() {
-    try {
-      var h = window.location.hash;
-      if (!h || h.length < 2) return;
-      applyPayload(JSON.parse(decodeURIComponent(h.substring(1))));
-    } catch (e) { /* ignore */ }
-  }
-  window.addEventListener("hashchange", initFromHash);
-
   window.updateChart = applyPayload;
-
-  state.data = CONFIG.data;
-  initFromHash();
+  fromHash();
   render();
-  window.addEventListener("resize", render);
 })();
 </script>
 </body>
